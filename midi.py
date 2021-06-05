@@ -33,14 +33,15 @@ def load_midi(file_name):
     
     precision = NOTE_PRECISION/4
     if len(time_signatures) != 0:
-        precision = NOTE_PRECISION/time_signatures[time_signature_idx].denominator
 
+        precision = NOTE_PRECISION/time_signatures[time_signature_idx].denominator
     divided_beats = []
     for i in range(beats.shape[0]-1):
         if time_signature_idx < len(time_signatures)-1:
             if beats[i] >= time_signatures[time_signature_idx].time:
                 time_signature_idx+=1
                 precision = NOTE_PRECISION/time_signatures[time_signature_idx].denominator
+                
         for j in range(int(precision)):
             divided_beats.append((beats[i+1]-beats[i])/precision * j + beats[i])
 

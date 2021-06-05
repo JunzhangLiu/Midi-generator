@@ -13,8 +13,8 @@ class Model(keras.Model):
         self.loss_tracker = keras.metrics.Mean(name="loss")
         
         ########################################
-        # Todo: experiment l2 reg with encoder #
-        # Experiment lstm encoder              #
+        # Todo: experiment l2 reg on encoder   #
+        # Todo: Experiment lstm encoder        #
         # ###################################### 
 
         self.flatten = tf.keras.layers.Flatten()
