@@ -12,7 +12,7 @@ TIME_STEP = PIX_PER_SECTION*SECTION
 DROP_OUT_RATE = 0.1
 BATCH_SIZE = 256
 
-TRAIN_STEPS = 70
+TRAIN_STEPS = 50
 EPOCHS = 32
 COMPONENTS_MEAN_SAVE_LOCATION = "./latent_distribution/components_mean.npy"
 COMPONENTS_STD_SAVE_LOCATION = "./latent_distribution/components_std.npy"

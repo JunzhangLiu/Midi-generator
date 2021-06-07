@@ -37,45 +37,27 @@ class Mixer(QMainWindow):
         self.transformation_mat = np.load(COMPONENTS_SAVE_LOCATION)
         self.components_std = np.load(COMPONENTS_STD_SAVE_LOCATION)
         self.components_mean = np.load(COMPONENTS_MEAN_SAVE_LOCATION)
-        self.default_components = np.copy(self.components_mean)
-        self.latent_vector= np.matmul(self.components_mean,self.transformation_mat)
+        self.components = np.load(COMPONENTS_MEAN_SAVE_LOCATION)
+        self.latent_vector= np.matmul(self.components,self.transformation_mat)
         
         #initialize music configuration
-        self.play_speed = 30
+        self.play_speed = 0.25
         self.note_duration = 0.2
         self.num_sliders = 20
         self.model = model
         self.population = None
         self.population_mu = None
         self.loaded = False
+        self.is_button_trigger = False
         self.num_neighbor = 30
         self.threshold = 60
 
         self.init_ui()
         
     def init_ui(self):
-        # seq = self.model.generate_from_latent(np.expand_dims(self.latent_vector,axis=0))
-        # seq=seq.numpy()
-        # seq=np.squeeze(seq,axis=0)
-        # self.music = np.copy(seq)
-        # seq[seq>=self.threshold/128]=1
-        # seq[np.logical_and(seq<self.threshold/128, seq>self.min_s/128)]=0
-        # seq[seq<=self.min_s/128]=0
-        # seq = np.flip(seq,axis=1)
-        # section_length = TIME_STEP // SECTION
-        # seq = np.reshape(seq,(SECTION,section_length,seq.shape[1]))
         scale = 2
         self.get_labels(TIME_STEP // SECTION,88,scale)
         self.set_pix_map()
-        # for i in range(SECTION):
-        #     img = Image.fromarray(np.transpose(seq[i],axes=(1,0))*128)
-        #     img = img.convert("RGBA")
-        #     img = img.resize((int(img.size[0]*scale),int(img.size[1]*scale)),Image.NEAREST)
-        #     img = ImageQt(img)
-        #     pixmap = QPixmap.fromImage(img)
-        #     self.labels[i].resize(pixmap.width(),pixmap.height())
-        #     self.labels[i].setPixmap(pixmap)
-        #     self.labels[i].setScaledContents(True)
         self.init_button()
         self.init_sliders()
         self.show()
@@ -106,9 +88,11 @@ class Mixer(QMainWindow):
 
         
     def random_song(self):
+        self.is_button_trigger = True
         for i in range(len(self.main_sliders)):
             self.main_sliders[i].setValue(random.randrange(-self.cover_std*self.precision,self.cover_std*self.precision))
-
+        self.is_button_trigger = False
+        self.set_pix_map()
     def set_pix_map(self,scaled=False):
         if scaled:
             seq = np.copy(self.music)
@@ -131,18 +115,16 @@ class Mixer(QMainWindow):
             img = ImageQt(img)
             pixmap = QPixmap.fromImage(img)
             self.labels[i].setPixmap(pixmap)
-            self.labels[i].resize(pixmap.width(),pixmap.height())
-            self.labels[i].setScaledContents(True)
 
         
     def get_labels(self,width,height,scale):
         self.labels=[]
-        idx = 0
         for i in range(2):
             for j in range(SECTION//2):
                 self.labels.append(qw.QLabel(self))
-                self.labels[idx].move(650+j*(width*scale+10),i*(height*scale+10))
-                idx+=1
+                self.labels[-1].move(650+j*(width*scale),i*(height*scale+10))
+                self.labels[-1].resize(width*scale,height*scale)
+
     def init_sliders(self,gap = 40):
         self.main_sliders = []
         # self.fine_tune_sliders=[]
@@ -166,9 +148,9 @@ class Mixer(QMainWindow):
 
         self.speed = qw.QSlider(Qt.Horizontal,self)
         self.speed.setGeometry(800, 600, 300, 30)
-        self.speed.setMinimum(-40)
-        self.speed.setMaximum(-10)
-        self.speed.setValue(-30)
+        self.speed.setMinimum(1)
+        self.speed.setMaximum(10)
+        self.speed.setValue(5)
         self.speed.valueChanged.connect(self.set_speed)
 
         self.duration = qw.QSlider(Qt.Horizontal,self)
@@ -183,32 +165,39 @@ class Mixer(QMainWindow):
 
 
     def val_change(self,idx):
-        self.components_mean[idx]=self.default_components[idx]+((self.main_sliders[idx].value())/self.precision) * self.components_std[idx]
-        self.latent_vector=np.matmul(self.components_mean,self.transformation_mat)
-        self.set_pix_map()
+        # print(self.main_sliders[idx].value())
+        deviation = (self.main_sliders[idx].value()/self.precision) * self.components_std[idx]
+        self.components[idx]=self.components_mean[idx]+deviation
+        # print("mean {:f}, dev {:f}, com {:f}, val {:f}".format(self.components_mean[idx],deviation,self.components[idx],self.main_sliders[idx].value()/self.precision))
+        self.latent_vector=np.matmul(self.components,self.transformation_mat)
+        if not self.is_button_trigger:
+            self.set_pix_map()
 
     def reset_play_speed(self):
-        self.speed.setValue(-30)
-        self.play_speed=30
+        self.speed.setValue(5)
+        self.play_speed=0.25
 
     def set_speed(self):
-        self.play_speed = -self.speed.value()
+        self.play_speed = self.speed.value()/20
 
     def note_scale(self):
         self.threshold=self.threshold_slider.value()
         self.set_pix_map(scaled=True)
     def play_music(self):
-        array_to_midi(np.transpose(self.music,axes=(1,0))*128,"./generated_music/foo",tempo=self.play_speed,threshold = self.threshold_slider.value(),dur = self.note_duration)
+        array_to_midi(np.transpose(self.music,axes=(1,0))*128,"./generated_music/foo",threshold = self.threshold_slider.value(),dur = self.note_duration,speed=self.play_speed)
         
         pygame.mixer.music.stop()
         pygame.mixer.music.load("./generated_music/foo.mid")
         pygame.mixer.music.play()
     def reset_values(self):
+        self.is_button_trigger = True
         for i in range(2*self.num_sliders):
-            # self.main_sliders[i].setValue(self.default_components[i]*self.precision)
+            # self.main_sliders[i].setValue(self.components_mean[i]*self.precision)
             self.main_sliders[i].setValue(0)
             # self.fine_tune_sliders[i].setValue(0)
         self.threshold_slider.setValue(60)
+        self.is_button_trigger = False
+        self.set_pix_map()
     def stop_music(self):
         pygame.mixer.music.stop()
 
@@ -224,12 +213,14 @@ class Mixer(QMainWindow):
             for i in range(sample_batches):
                 print("sample:", i,end="\r")
                 x = self.population[i*batch_size:(i+1)*batch_size]
+                x = tf.cast(x,tf.float16)
                 z_mu = self.model.get_mu(x)
                 z_mu=z_mu.numpy()
                 sample_mu.append(z_mu)
             for i in range(sample_batches*batch_size,self.population.shape[0]):
                 print("sample:", i,end="\r")
                 x = self.population[i]
+                x = tf.cast(x,tf.float16)
                 z_mu=self.model.get_mu(np.expand_dims(x,axis=0))
                 z_mu=z_mu.numpy()
                 sample_mu.append(z_mu)
@@ -240,7 +231,8 @@ class Mixer(QMainWindow):
         dist = np.sqrt(np.sum((self.latent_vector-self.population_mu)**2, axis=1))
         nn_idx = np.argsort(dist)[:self.num_neighbor]
         for idx,i in enumerate(nn_idx):
-            array_to_midi(np.transpose(self.population[i]*128,axes=(1,0)),"./nn/"+str(idx),tempo=self.play_speed)
+            print("nn {:d}, dist {:f}".format(idx,dist[i]))
+            array_to_midi(np.transpose(self.population[i]*128,axes=(1,0)),"./nn/"+str(idx),speed=self.play_speed)
         print("found, midi pieces under ./nn/")
 
         
@@ -250,12 +242,10 @@ model = Model()
 
 
 
-load = 1
-
 ckpt = tf.train.Checkpoint(model)
 path = os.path.join(os.path.dirname(__file__),"saved_model/save_mode/model")
-if load:
-    ckpt.read(path)
+ckpt.read(path)
+
 
 # mixer config
 freq = 44100  # audio CD quality
@@ -264,7 +254,6 @@ channels = 2  # 1 is mono, 2 is stereo
 buffer = 1024   # number of samples
 pygame.mixer.init(freq, bitsize, channels, buffer)
 
-# optional volume 0 to 1.0
 pygame.mixer.music.set_volume(0.8)
 
 mixer = Mixer(200,200,1500,900,model)

@@ -41,7 +41,7 @@ def load_midi(file_name):
             if beats[i] >= time_signatures[time_signature_idx].time:
                 time_signature_idx+=1
                 precision = NOTE_PRECISION/time_signatures[time_signature_idx].denominator
-                
+
         for j in range(int(precision)):
             divided_beats.append((beats[i+1]-beats[i])/precision * j + beats[i])
 
@@ -93,8 +93,6 @@ def load_all(load_array_from_file = True,save = True):
                 i += 1
             except Exception as e:
                 print("failed to load file "+f,e)
-            # if i == 20:
-            #     break
     data = np.zeros((num_data,TIME_STEP,MAX_NOTE-MIN_NOTE),dtype=np.int8)
     idx = 0
     for i, notes in enumerate(midis):
@@ -120,7 +118,7 @@ def preprocess(arr):
         cut.append(arr[j:j+TIME_STEP])
     cut = np.array(cut)
     return cut[:,:]
-def array_to_midi(midi_array,file_name,tempo=30,threshold=64,dur=0.2):
+def array_to_midi(midi_array,file_name,tempo=30,threshold=64,dur=0.2,speed=0.5):
     midi_file = pretty_midi.PrettyMIDI(initial_tempo=tempo)
     piano = pretty_midi.Instrument(0)
     for i in range(midi_array.shape[0]):
@@ -134,7 +132,7 @@ def array_to_midi(midi_array,file_name,tempo=30,threshold=64,dur=0.2):
             for idx,j in enumerate(gap):
                 end = has_note[j]
                 velocity = 127
-                start = midi_file.tick_to_time(start)
+                start = midi_file.tick_to_time(start)/speed
                 x = pretty_midi.Note(velocity=velocity, pitch=i+MIN_NOTE, start=start, end=start+dur)
                 for k in range(len(notes)):
                     if notes[k].start <= start and notes[k].end >= start:
@@ -146,7 +144,7 @@ def array_to_midi(midi_array,file_name,tempo=30,threshold=64,dur=0.2):
                 start = has_note[j+1]
             end = has_note[-1]
             velocity = 127
-            start = midi_file.tick_to_time(start)
+            start = midi_file.tick_to_time(start)/speed
             x = pretty_midi.Note(velocity=velocity, pitch=i+MIN_NOTE, start=start, end=start+dur)
             for k in range(len(notes)):
                 if notes[k].start <= start and notes[k].end >= start:
@@ -163,7 +161,7 @@ if __name__=="__main__":
     # data,length = load_midi("./akishimaiNoNakuKoroni.mid")
     # arr = midi_to_array(data,length)
     # print(arr.shape)
-    # array_to_midi(arr*128,"foo",tempo=10)
+    # array_to_midi(arr*128,"foo",speed=0.2)
     # img = Image.fromarray(arr*128)
     # img = img.convert("RGBA")
     # img.save("foo.png")

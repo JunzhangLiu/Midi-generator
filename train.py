@@ -33,7 +33,7 @@ data = load_all()
 print(data.shape)
 model = Model()
 # opt = tf.keras.optimizers.RMSprop(learning_rate=0.001)
-model.compile(optimizer="adam")
+model.compile(optimizer="adam",loss="binary_crossentropy")
 load = 0
 
 ckpt = tf.train.Checkpoint(model)
@@ -41,13 +41,21 @@ path = os.path.join(os.path.dirname(__file__),"saved_model/save_mode/model")
 # path_b = os.path.join(os.path.dirname(__file__),"saved_model/backup_model/model")
 if load:
     ckpt.read(path)
+    
+np.random.seed(0)  
+np.random.shuffle(data)
+train_set_sz = int(data.shape[0]/BATCH_SIZE)*BATCH_SIZE
+data=data[:train_set_sz]
+# x = data[:train_set_sz]
+# x_val = data[train_set_sz:]
 
 # for i in range(TRAIN_STEPS):
+print(data.shape)
 for i in range(TRAIN_STEPS):
     print(i)
-    model.fit(x=data,batch_size=BATCH_SIZE,epochs=EPOCHS,shuffle=True)
+
+    model.fit(x=data,batch_size=BATCH_SIZE,epochs=EPOCHS,shuffle=True)#,validation_data=x_val)
     # if i % 2 == 0:
-    np.random.shuffle(data)
     save_sample(i,data)
     # if i % 2 == 0 and i != 0:
     ckpt.write(path)
