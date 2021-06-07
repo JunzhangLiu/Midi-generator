@@ -13,9 +13,9 @@ class Model(keras.Model):
         self.train_loss_tracker = keras.metrics.Mean(name="loss")
         self.flatten = tf.keras.layers.Flatten()
         self.encoder = keras.Sequential([
-                                keras.layers.LSTM(64,return_sequences=True),
-                                keras.layers.LSTM(32,return_sequences=True),
-                                keras.layers.LSTM(1,return_sequences=True),
+                                keras.layers.Bidirectional(keras.layers.LSTM(64,return_sequences=True)),
+                                keras.layers.Bidirectional(keras.layers.LSTM(32,return_sequences=True)),
+                                keras.layers.Bidirectional(keras.layers.LSTM(1,return_sequences=True)),
                                 keras.layers.Flatten(),
                                 keras.layers.Dense(1024),#,kernel_regularizer=tf.keras.regularizers.L2()),
                                 keras.layers.BatchNormalization(),
@@ -31,9 +31,9 @@ class Model(keras.Model):
 
                                 keras.layers.Reshape((TIME_STEP,16)),
 
-                                keras.layers.LSTM(128,return_sequences=True),
+                                keras.layers.Bidirectional(keras.layers.LSTM(128,return_sequences=True)),
                                 
-                                keras.layers.LSTM(128,return_sequences=True),
+                                keras.layers.Bidirectional(keras.layers.LSTM(128,return_sequences=True)),
                                 keras.layers.LSTM(88,return_sequences=True),
         ])
     def call(self,inputs, training=True):
