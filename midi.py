@@ -1,13 +1,11 @@
 import numpy as np
 import pretty_midi
 import os
-import functools
 from hyper_param import *
-from PIL import Image
 from math import ceil
 
-remove_instruments = [i for i in range(113,129)]+[i for i in range(97,105)] 
-def midi_to_array(notes,length):
+exclude_instruments = [i for i in range(113,129)]+[i for i in range(97,105)] 
+def notes_to_array(notes,length):
     arr = np.zeros((MAX_NOTE-MIN_NOTE,length),dtype=np.int8)
 
     for note in notes:
@@ -53,7 +51,7 @@ def load_midi(file_name):
     for instrument in midi_file.instruments:
         if instrument.is_drum:
             continue
-        if instrument.program in remove_instruments:
+        if instrument.program in exclude_instruments:
             continue
         for note in instrument.notes:
             if note.pitch < MIN_NOTE or note.pitch>=MAX_NOTE:
@@ -84,8 +82,6 @@ def load_all(load_array_from_file = True,save = True):
             try:
                 # midi_file = pretty_midi.PrettyMIDI(root+f)
                 notes,length = load_midi(root+f)
-                # beat = midi_file.get_beats()
-                # length = beat.shape[0]
                 num_data += ceil(length/TIME_STEP)*2
                 midis.append(notes)
                 lengths.append(length)
@@ -98,7 +94,7 @@ def load_all(load_array_from_file = True,save = True):
     for i, notes in enumerate(midis):
         if len(notes)==0:
             continue
-        arr = midi_to_array(notes,lengths[i])
+        arr = notes_to_array(notes,lengths[i])
         # array_to_midi(arr*128,"foo")
         seg = preprocess(arr)
         data[idx:idx+seg.shape[0]] = seg
@@ -119,47 +115,66 @@ def preprocess(arr):
     cut = np.array(cut)
     return cut[:,:]
 def array_to_midi(midi_array,file_name,tempo=30,threshold=64,dur=0.2,speed=0.5):
+    if midi_array.shape[0]!=88:
+        midi_array = np.transpose(midi_array,axes=(1,0))
     midi_file = pretty_midi.PrettyMIDI(initial_tempo=tempo)
     piano = pretty_midi.Instrument(0)
-    for i in range(midi_array.shape[0]):
-        notes = []
-        current_note = midi_array[i]
-        has_note = np.squeeze(np.argwhere(midi_array[i]>threshold),axis=-1)
-        if has_note.shape[0]>0:
-            difference = has_note[1:]-has_note[0:-1]
-            gap = np.squeeze(np.argwhere(difference>1),axis=-1)
-            start = has_note[0]
-            for idx,j in enumerate(gap):
-                end = has_note[j]
-                velocity = 127
-                start = midi_file.tick_to_time(start)/speed
-                x = pretty_midi.Note(velocity=velocity, pitch=i+MIN_NOTE, start=start, end=start+dur)
-                for k in range(len(notes)):
-                    if notes[k].start <= start and notes[k].end >= start:
-                        collide = notes.pop(k)
-                        collide.end = start-0.01
-                        notes.append(collide)
-
-                notes.append(x)
-                start = has_note[j+1]
-            end = has_note[-1]
-            velocity = 127
+    for i in range(88):
+        current_pitch = []
+        notes = np.argwhere(midi_array[i]>threshold)
+        for note in notes:
+            pitch,start = i,note[0]
             start = midi_file.tick_to_time(start)/speed
-            x = pretty_midi.Note(velocity=velocity, pitch=i+MIN_NOTE, start=start, end=start+dur)
-            for k in range(len(notes)):
-                if notes[k].start <= start and notes[k].end >= start:
-                    collide = notes.pop(k)
+            x = pretty_midi.Note(velocity=127, pitch=pitch+MIN_NOTE, start=start, end=start+dur)
+            for k in range(len(current_pitch)):
+                if current_pitch[k].start <= start and current_pitch[k].end >= start:
+                    collide = current_pitch.pop(k)
                     collide.end = start-0.01
-                    notes.append(collide)
-            notes.append(x)
-            for note in notes:
-                piano.notes.append(note)
+                    current_pitch.append(collide)
+            current_pitch.append(x)
+        for note in current_pitch:
+            piano.notes.append(note)
+
+
+    # for i in range(midi_array.shape[0]):
+    #     notes = []
+    #     current_note = midi_array[i]
+    #     has_note = np.squeeze(np.argwhere(midi_array[i]>threshold),axis=-1)
+    #     if has_note.shape[0]>0:
+    #         difference = has_note[1:]-has_note[0:-1]
+    #         gap = np.squeeze(np.argwhere(difference>1),axis=-1)
+    #         start = has_note[0]
+    #         for idx,j in enumerate(gap):
+    #             end = has_note[j]
+    #             velocity = 127
+    #             start = midi_file.tick_to_time(start)/speed
+    #             x = pretty_midi.Note(velocity=velocity, pitch=i+MIN_NOTE, start=start, end=start+dur)
+    #             for k in range(len(notes)):
+    #                 if notes[k].start <= start and notes[k].end >= start:
+    #                     collide = notes.pop(k)
+    #                     collide.end = start-0.01
+    #                     notes.append(collide)
+
+    #             notes.append(x)
+    #             start = has_note[j+1]
+    #         end = has_note[-1]
+    #         velocity = 127
+    #         start = midi_file.tick_to_time(start)/speed
+    #         x = pretty_midi.Note(velocity=velocity, pitch=i+MIN_NOTE, start=start, end=start+dur)
+    #         for k in range(len(notes)):
+    #             if notes[k].start <= start and notes[k].end >= start:
+    #                 collide = notes.pop(k)
+    #                 collide.end = start-0.01
+    #                 notes.append(collide)
+    #         notes.append(x)
+    #         for note in notes:
+    #             piano.notes.append(note)
     midi_file.instruments.append(piano)
     midi_file.write(file_name+".mid")
 
 if __name__=="__main__":
     # data,length = load_midi("./akishimaiNoNakuKoroni.mid")
-    # arr = midi_to_array(data,length)
+    # arr = notes_to_array(data,length)
     # print(arr.shape)
     # array_to_midi(arr*128,"foo",speed=0.2)
     # img = Image.fromarray(arr*128)

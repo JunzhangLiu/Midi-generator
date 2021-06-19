@@ -13,6 +13,7 @@ import pretty_midi
 import pygame
 from midi import *
 from hyper_param import *
+from saved_file_location import *
 import random
 
 class Slider_callback():
@@ -22,9 +23,10 @@ class Slider_callback():
     def __call__(self):
         return self.fun(self.arg)
 
-class Mixer(QMainWindow):
+
+class GUI(QMainWindow):
     def __init__(self,x,y,wid,ht,model,latent_dim=128,img_rescale=10):
-        super(Mixer,self).__init__()
+        super(GUI,self).__init__()
         self.setGeometry(x,y,wid,ht)
         self.wid = wid
         self.ht=ht
@@ -33,7 +35,7 @@ class Mixer(QMainWindow):
         self.img_rescale = img_rescale
 
         #initialize latent vector
-        self.cover_std = 3
+        self.std_range = 4
         self.transformation_mat = np.load(COMPONENTS_SAVE_LOCATION)
         self.components_std = np.load(COMPONENTS_STD_SAVE_LOCATION)
         self.components_mean = np.load(COMPONENTS_MEAN_SAVE_LOCATION)
@@ -45,10 +47,8 @@ class Mixer(QMainWindow):
         self.note_duration = 0.2
         self.num_sliders = 20
         self.model = model
-        self.population = None
-        self.population_mu = None
         self.loaded = False
-        self.is_button_trigger = False
+        self.is_button_press = False
         self.num_neighbor = 30
         self.threshold = 60
 
@@ -88,28 +88,28 @@ class Mixer(QMainWindow):
 
         
     def random_song(self):
-        self.is_button_trigger = True
+        self.is_button_press = True
         for i in range(len(self.main_sliders)):
-            self.main_sliders[i].setValue(random.randrange(-self.cover_std*self.precision,self.cover_std*self.precision))
-        self.is_button_trigger = False
+            self.main_sliders[i].setValue(random.randrange(-self.std_range*self.precision,self.std_range*self.precision))
+        self.is_button_press = False
         self.set_pix_map()
-    def set_pix_map(self,scaled=False):
-        if scaled:
-            seq = np.copy(self.music)
+    def set_pix_map(self,set_threshold=False):
+        if set_threshold:
+            midi_array = np.copy(self.midi_array)
         else:
-            seq = self.model.generate_from_latent(np.expand_dims(self.latent_vector,axis=0))
-            seq=seq.numpy()
-            seq=np.squeeze(seq,axis=0)
-            self.music = np.copy(seq)
-        seq[seq>=self.threshold/128]=1
-        seq[np.logical_and(seq<self.threshold/128,seq>self.min_s/128)]=0.3
-        seq[seq<=self.min_s/128]=0
-        seq = np.flip(seq,axis=1)
+            midi_array = self.model.generate_from_latent(np.expand_dims(self.latent_vector,axis=0))
+            midi_array=midi_array.numpy()
+            midi_array=np.squeeze(midi_array,axis=0)
+            self.midi_array = np.copy(midi_array)
+        midi_array[midi_array>=self.threshold/128]=1
+        midi_array[np.logical_and(midi_array<self.threshold/128,midi_array>self.min_s/128)]=0.3
+        midi_array[midi_array<=self.min_s/128]=0
+        midi_array = np.flip(midi_array,axis=1)
         section_length = TIME_STEP // SECTION
-        seq = np.reshape(seq,(SECTION,section_length,seq.shape[1]))
+        midi_array = np.reshape(midi_array,(SECTION,section_length,midi_array.shape[1]))
         scale = 2
         for i in range(SECTION):
-            img = Image.fromarray(np.transpose(seq[i],axes=(1,0))*128)
+            img = Image.fromarray(np.transpose(midi_array[i],axes=(1,0))*128)
             img = img.convert("RGBA")
             img = img.resize((int(img.size[0]*scale),int(img.size[1]*scale)),Image.NEAREST)
             img = ImageQt(img)
@@ -133,18 +133,18 @@ class Mixer(QMainWindow):
             for j in range(self.num_sliders):
                 self.main_sliders.append(qw.QSlider(Qt.Horizontal,self))
                 self.main_sliders[i*self.num_sliders+j].setGeometry(i*320, j*40, 300, 30)
-                self.main_sliders[i*self.num_sliders+j].setMinimum(-self.cover_std*self.precision)
-                self.main_sliders[i*self.num_sliders+j].setMaximum(self.cover_std*self.precision)
+                self.main_sliders[i*self.num_sliders+j].setMinimum(-self.std_range*self.precision)
+                self.main_sliders[i*self.num_sliders+j].setMaximum(self.std_range*self.precision)
                 self.main_sliders[i*self.num_sliders+j].setValue(0)
                 self.callback_idx.append(i*self.num_sliders+j)
                 self.main_sliders[i*self.num_sliders+j].valueChanged.connect(Slider_callback(i*self.num_sliders+j,self.val_change))
-
+        
         self.threshold_slider = qw.QSlider(Qt.Horizontal,self)
         self.threshold_slider.setGeometry(800, 560, 300, 30)
         self.threshold_slider.setMinimum(self.min_s)
         self.threshold_slider.setMaximum(120)
         self.threshold_slider.setValue(60)
-        self.threshold_slider.valueChanged.connect(self.note_scale)
+        self.threshold_slider.valueChanged.connect(self.set_threshold)
 
         self.speed = qw.QSlider(Qt.Horizontal,self)
         self.speed.setGeometry(800, 600, 300, 30)
@@ -170,8 +170,10 @@ class Mixer(QMainWindow):
         self.components[idx]=self.components_mean[idx]+deviation
         # print("mean {:f}, dev {:f}, com {:f}, val {:f}".format(self.components_mean[idx],deviation,self.components[idx],self.main_sliders[idx].value()/self.precision))
         self.latent_vector=np.matmul(self.components,self.transformation_mat)
-        if not self.is_button_trigger:
+        if not self.is_button_press:
             self.set_pix_map()
+    # def set_slider_param(self,param_name):
+    #     self.slider_params[param_name] = self.sliders[param_name].value()
 
     def reset_play_speed(self):
         self.speed.setValue(5)
@@ -180,23 +182,23 @@ class Mixer(QMainWindow):
     def set_speed(self):
         self.play_speed = self.speed.value()/20
 
-    def note_scale(self):
+    def set_threshold(self):
         self.threshold=self.threshold_slider.value()
-        self.set_pix_map(scaled=True)
+        self.set_pix_map(set_threshold=True)
     def play_music(self):
-        array_to_midi(np.transpose(self.music,axes=(1,0))*128,"./generated_music/foo",threshold = self.threshold_slider.value(),dur = self.note_duration,speed=self.play_speed)
+        array_to_midi(np.transpose(self.midi_array,axes=(1,0))*128,"./generated_music/foo",threshold = self.threshold_slider.value(),dur = self.note_duration,speed=self.play_speed)
         
         pygame.mixer.music.stop()
         pygame.mixer.music.load("./generated_music/foo.mid")
         pygame.mixer.music.play()
     def reset_values(self):
-        self.is_button_trigger = True
+        self.is_button_press = True
         for i in range(2*self.num_sliders):
             # self.main_sliders[i].setValue(self.components_mean[i]*self.precision)
             self.main_sliders[i].setValue(0)
             # self.fine_tune_sliders[i].setValue(0)
         self.threshold_slider.setValue(60)
-        self.is_button_trigger = False
+        self.is_button_press = False
         self.set_pix_map()
     def stop_music(self):
         pygame.mixer.music.stop()
@@ -204,31 +206,29 @@ class Mixer(QMainWindow):
     def find_nearest(self):
         if not self.loaded:
             print("data not loaded, start loading now")
-            time_step = 512
             self.population = load_all()
-            # self.population = preprocess(data)
             batch_size = 64
             sample_batches = self.population.shape[0]//batch_size
-            sample_mu = []
+            population_latent_vec = []
             for i in range(sample_batches):
                 print("sample:", i,end="\r")
                 x = self.population[i*batch_size:(i+1)*batch_size]
                 x = tf.cast(x,tf.float16)
-                z_mu = self.model.get_mu(x)
-                z_mu=z_mu.numpy()
-                sample_mu.append(z_mu)
+                latent_vec_batch = self.model.get_latent_enc(x)
+                latent_vec_batch=latent_vec_batch.numpy()
+                population_latent_vec.append(latent_vec_batch)
             for i in range(sample_batches*batch_size,self.population.shape[0]):
                 print("sample:", i,end="\r")
                 x = self.population[i]
                 x = tf.cast(x,tf.float16)
-                z_mu=self.model.get_mu(np.expand_dims(x,axis=0))
-                z_mu=z_mu.numpy()
-                sample_mu.append(z_mu)
+                latent_vec_batch=self.model.get_latent_enc(np.expand_dims(x,axis=0))
+                latent_vec_batch=latent_vec_batch.numpy()
+                population_latent_vec.append(latent_vec_batch)
             print("done")
-            self.population_mu = np.concatenate(sample_mu)
+            self.population_latent_vec = np.concatenate(population_latent_vec)
         self.loaded = True
-        print("data loaded, start finding nearest neighbor")
-        dist = np.sqrt(np.sum((self.latent_vector-self.population_mu)**2, axis=1))
+        print("data loaded, find the nearest neighbor")
+        dist = np.sqrt(np.sum((self.latent_vector-self.population_latent_vec)**2, axis=1))
         nn_idx = np.argsort(dist)[:self.num_neighbor]
         for idx,i in enumerate(nn_idx):
             print("nn {:d}, dist {:f}".format(idx,dist[i]))
@@ -239,13 +239,10 @@ class Mixer(QMainWindow):
 
 app = qa(sys.argv)
 model = Model()
-
-
-
 ckpt = tf.train.Checkpoint(model)
-path = os.path.join(os.path.dirname(__file__),"saved_model/save_mode/model")
-ckpt.read(path)
-
+# path = os.path.join(os.path.dirname(__file__),"saved_model/save_mode/model")
+path = os.path.join(os.path.dirname(__file__),SAVED_MODEL_LOCATION)
+ckpt.read(path)#.assert_consumed()
 
 # mixer config
 freq = 44100  # audio CD quality
@@ -256,5 +253,5 @@ pygame.mixer.init(freq, bitsize, channels, buffer)
 
 pygame.mixer.music.set_volume(0.8)
 
-mixer = Mixer(200,200,1500,900,model)
+gui = GUI(200,200,1500,900,model)
 sys.exit(app.exec_())

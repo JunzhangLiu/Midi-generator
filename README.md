@@ -9,4 +9,5 @@ I thought I made a terrible mistake by using the bidirectional layers since I do
 I have 2 hypotheses:<br />
 1. The sequence is too long (about 1500 ticks) for the network to realize some of them are the reverse of the other. In this case, the model is very likely to behave similarly comparing to models without bidirectional layers.<br />
 2. If the network is able to tell which 2 songs are the reverse of each other, it wll have to remember some long term features, which is benefitial when generating musics. <br />
+
 I find the second one more convincing, because the loss changes very differently comparing to all previous models, and I observe some structures in the generated muscis, which are not found in previous models without bidirectional layers.<br />

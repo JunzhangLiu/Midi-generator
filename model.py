@@ -32,8 +32,10 @@ class Model(keras.Model):
                                 keras.layers.Reshape((TIME_STEP,16)),
 
                                 keras.layers.Bidirectional(keras.layers.LSTM(128,return_sequences=True)),
+                                keras.layers.Dropout(DROP_OUT_RATE),
                                 
                                 keras.layers.Bidirectional(keras.layers.LSTM(128,return_sequences=True)),
+                                keras.layers.Dropout(DROP_OUT_RATE),
                                 keras.layers.LSTM(88,return_sequences=True),
         ])
     def call(self,inputs, training=True):
@@ -49,7 +51,7 @@ class Model(keras.Model):
         decoded = tf.stop_gradient(self.decoder(z,training=False))
         return decoded
 
-    def get_mu(self,inputs):
+    def get_latent_enc(self,inputs):
         x = tf.stop_gradient(self.encoder(inputs, training=False))
         return x
     def train_step(self,data):
@@ -75,17 +77,3 @@ class Model(keras.Model):
         # self.kl_loss.update_state(kl_loss)
         # self.recon_loss.update_state(reconstruction_loss)
         return {"loss": self.train_loss_tracker.result()}#, "kl_loss": self.kl_loss.result(), "recon_loss": self.recon_loss.result()}
-    
-    # def test_step(self,data):
-    #     x,_ = data
-    #     print(data)
-    #     encoded = self.encoder(x, training=False)
-    #     y_pred = self.decoder(encoded,training=False)
-    #     y_true = self.flatten(x)
-    #     y_pred = self.flatten(y_pred)
-
-    #     # y_pred = self.flatten(self(data,training=False))
-
-    #     loss = tf.keras.losses.binary_crossentropy(y_true,y_pred)
-    #     self.test_loss_tracker.update(loss)
-    #     return {"test_loss": self.test_loss_tracker.result()}
