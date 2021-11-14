@@ -1,4 +1,4 @@
-# Autoencoder-midi-generator
+# Midi-generator
 GUI Feature:<br/>
 The 2 dark stripes are the generated musics. Horizontal axis is time, vertical axis is pitch from 0 to 87 (there are 88 keys on a piano). The color of the pixel means whether a key will be played or not. Black means that key will not be played at that time step; grey means it can be played; white means it is being played.<br/>
 There are also sliders and buttons on the GUI, each serves a different purpose.
